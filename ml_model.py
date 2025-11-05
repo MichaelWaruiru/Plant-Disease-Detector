@@ -5,6 +5,7 @@ from PIL import Image
 import cv2
 from tensorflow import keras
 from keras import layers
+from keras import regularizers
 from keras.preprocessing.image import ImageDataGenerator
 import matplotlib.pyplot as plt
 from sklearn.utils import class_weight
@@ -65,40 +66,40 @@ class PlantDiseaseModel:
       layers.Rescaling(1./255),
       
       # First Conv Block
-      layers.Conv2D(64, (3, 3), activation="relu"),
+      layers.Conv2D(64, (3, 3), activation="relu", kernel_regularizer=regularizers.l2(0.001)),
       layers.BatchNormalization(),
       layers.MaxPooling2D((2, 2)),
-      layers.Dropout(0.25),
+      layers.SpatialDropout2D(0.3),
       
       # Second Conv Block
-      layers.Conv2D(64, (3, 3), activation="relu"),
-      layers.BatchNormalization(),
-      layers.MaxPooling2D((2, 2)),
-      layers.Dropout(0.25),
+      # layers.Conv2D(64, (3, 3), activation="relu"),
+      # layers.BatchNormalization(),
+      # layers.MaxPooling2D((2, 2)),
+      # layers.Dropout(0.25),
       
       # Third Conv Block
-      layers.Conv2D(128, (3, 3), activation='relu'),
+      layers.Conv2D(128, (3, 3), activation='relu', kernel_regularizer=regularizers.l2(0.001)),
       layers.BatchNormalization(),
       layers.MaxPooling2D((2, 2)),
-      layers.Dropout(0.25),
+      layers.SpatialDropout2D(0.3),
       
       # Fourth Conv Block
-      layers.Conv2D(256, (3, 3), activation='relu'),
+      layers.Conv2D(256, (3, 3), activation='relu', kernel_regularizer=regularizers.l2(0.001)),
       layers.BatchNormalization(),
       layers.MaxPooling2D((2, 2)),
-      layers.Dropout(0.25),
+      layers.SpatialDropout2D(0.3),
       
       # Global Average Pooling
       layers.GlobalAveragePooling2D(),
       
       # Dense layers
-      layers.Dense(512, activation='relu'),
+      layers.Dense(512, activation='relu', kernel_regularizer=regularizers.l2(0.001)),
       layers.BatchNormalization(),
       layers.Dropout(0.5),
       
-      layers.Dense(256, activation='relu'),
-      layers.BatchNormalization(),
-      layers.Dropout(0.5),
+      # layers.Dense(256, activation='relu'),
+      # layers.BatchNormalization(),
+      # layers.Dropout(0.5),
       
       # Output layer
       layers.Dense(self.num_classes, activation='softmax')
@@ -193,6 +194,7 @@ class PlantDiseaseModel:
         rescale=1./255,
         rotation_range=30,
         width_shift_range=0.2,
+        brightness_range=[0.8, 1.2],
         height_shift_range=0.2,
         horizontal_flip=True,
         zoom_range=0.3,
@@ -248,15 +250,17 @@ class PlantDiseaseModel:
       )
       class_weights = dict(enumerate(class_weights))
       
-      # User MobileNetV2 for transfer training
+      # User MobileNetV2 for transfer training + L2
       base_model = MobileNetV2(input_shape=(224, 224, 3), include_top=False, weights="imagenet")
       base_model.trainable = False #Initial freezes base model
       
+      reg = regularizers.l2(0.001)
       inputs = keras.Input(shape=(224, 224, 3))
       x= base_model(inputs, training=False)
       x = layers.GlobalAveragePooling2D()(x)
-      x = layers.Dense(256, activation="relu")(x)
-      x = layers.Dropout(0.3)(x)
+      x = layers.Dense(256, activation="relu", kernel_regularizer=reg)(x)
+      x= layers.BatchNormalization()(x)
+      x = layers.Dropout(0.5)(x)
       outputs = layers.Dense(self.num_classes, activation="softmax")(x)
       
       self.model = keras.Model(inputs, outputs)
@@ -276,8 +280,8 @@ class PlantDiseaseModel:
           keras.callbacks.ReduceLROnPlateau(
             monitor="val_loss",
             factor=0.2,
-            patience=10,
-            min_lr=0.0001
+            patience=5,
+            min_lr=1e-6
           ),
           keras.callbacks.ModelCheckpoint(
             self.model_path,
@@ -304,13 +308,13 @@ class PlantDiseaseModel:
       
       # Unfreeze base model for fine-tuning
       # base_model.trainable = True
-      for layer in base_model.layers[:-40]:
-        layer.trainable = False
+      # for layer in base_model.layers[:-40]:
+      #   layer.trainable = False
       for layer in base_model.layers[-40:]:
         layer.trainable = True
         
       self.model.compile(
-        optimizer=keras.optimizers.Adam(learning_rate=0.0001),
+        optimizer=keras.optimizers.Adam(learning_rate=1e-4),
         loss=keras.losses.CategoricalCrossentropy(label_smoothing=0.1),
         metrics=["accuracy"]
       )
@@ -352,7 +356,7 @@ class PlantDiseaseModel:
         return self.analyze_image_heuristics(image_path)
       
       # Reload class_names to ensure consistency with model ouput
-      if not os.path.exists(self.class_names_path):
+      if os.path.exists(self.class_names_path):
         with open(self.class_names_path, "r") as f:
           self.class_names = json.load(f)
           
