@@ -8,7 +8,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 def main():
     parser = argparse.ArgumentParser(description='Evaluate Plant Disease Detection Model')
-    parser.add_argument('--test_path', type=str, help='Path to test dataset', default="dataset/test")
+    parser.add_argument('--test_path', type=str, help='Path to test dataset', default="dataset/PlantVillage/test")
     parser.add_argument('--model_path', type=str, default='models/plant_disease_cnn_model.keras', help='Path to trained model')
     
     args = parser.parse_args()
@@ -27,11 +27,14 @@ def main():
     
     # Evaluate model
     logging.info(f"Evaluating model on test dataset: {args.test_path}")
-    accuracy, report = model.evaluate_model(args.test_path)
+    results = model.evaluate_model(args.test_path)
     
-    if accuracy:
-        print(f"\nTest Accuracy: {accuracy:.4f}")
-        print(f"\nClassification Report:\n{report}")
+    if results:
+        print(f"\nTest Accuracy: {results['accuracy']:.4f}")
+        print(f"Macro Precision: {results['macro_precision']:.4f}")
+        print(f"Macro Recall: {results['macro_recall']:.4f}")
+        print(f"Macro F1-score: {results['macro_f1']:.4f}")
+        print(f"\nClassification Report:\n{results['report']}")
     else:
         logging.error("Evaluation failed!")
 
