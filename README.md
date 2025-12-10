@@ -1,4 +1,4 @@
-# Group43-Final-Project: Plant Disease Detector Web App 🌿
+# Plant Disease Detector Web App 🌿
 
 A full-stack deep learning web application to detect plant leaf diseases for Pepper, Tomato, and Potato using the PlantVillage dataset.
 
@@ -92,11 +92,20 @@ Create a .env file in the root folder with your Flask session secret:
 ## Training the Model
 Make sure you have the PlantVillage dataset in the dataset/ folder, structured like:
 ```
-    dataset/
-      Pepper__bell___Bacterial_spot/
-      Pepper__bell___healthy/
-      Potato___Early_blight/
-      ...
+    dataset/PlantVillage/
+      Plant Diseases Dataset/
+        train/
+        valid/
+          Pepper__bell___Bacterial_spot/
+          Pepper__bell___healthy/
+          Potato___Early_blight/
+          ...
+
+      test/
+        Pepper__bell___Bacterial_spot/
+        Pepper__bell___healthy/
+        Potato___Early_blight/
+        ...
 ```
 
 Then train the model:
