@@ -4,20 +4,23 @@ import numpy as np
 from PIL import Image
 import cv2
 from tensorflow import keras
-from keras import layers
-from keras import regularizers
+from keras import layers, regularizers
 from keras.preprocessing.image import ImageDataGenerator
 import matplotlib.pyplot as plt
 from sklearn.utils import class_weight
 import json
 from disease_data import DISEASE_INFO, TREATMENT_RECOMMENDATIONS
 
+# For faster GPU training
+from keras import mixed_precision
+mixed_precision.set_global_policy("mixed_float16")
+
 
 class PlantDiseaseModel:
   """Plant Disease Detection Model"""
   def __init__(self):
     self.model = None
-    self.dataset_path = "dataset"
+    self.dataset_path = "dataset/PlantVillage/Plant Diseases Dataset"
     self.img_size = (224, 224)
    
     self.class_names_path = "models/class_names.json"
@@ -57,10 +60,10 @@ class PlantDiseaseModel:
       keras.Input(shape=(224, 224, 3)),
       
      # Data augmentation layers
-      layers.RandomFlip("horizontal"),
-      layers.RandomRotation(0.1),
-      layers.RandomZoom(0.1),
-      layers.RandomContrast(0.1),
+      # layers.RandomFlip("horizontal"),
+      # layers.RandomRotation(0.1),
+      # layers.RandomZoom(0.1),
+      # layers.RandomContrast(0.1),
       
       # Rescaling
       layers.Rescaling(1./255),
@@ -109,7 +112,12 @@ class PlantDiseaseModel:
     model.compile(
       optimizer=keras.optimizers.Adam(learning_rate=0.001),
       loss=keras.losses.CategoricalCrossentropy(label_smoothing=0.1),
-      metrics=["accuracy"]
+      metrics=[
+        "accuracy",
+        keras.metrics.Precision(name="precision"),
+        keras.metrics.Recall(name="recall"),
+        keras.metrics.AUC(name="auc")
+      ]
     )
     
     return model
@@ -187,50 +195,79 @@ class PlantDiseaseModel:
   def train_with_real_data(self, train_dir, epochs=30, batch_size=32):
     """Train model with real PlantVillage dataset"""
     try:
+      import tensorflow as tf
       from keras.applications import MobileNetV2
       
-      # Create data generators with augmentation
-      train_datagen = ImageDataGenerator(
-        rescale=1./255,
-        rotation_range=30,
-        width_shift_range=0.2,
-        brightness_range=[0.8, 1.2],
-        height_shift_range=0.2,
-        horizontal_flip=True,
-        zoom_range=0.3,
-        shear_range=0.2,
-        fill_mode="nearest",
-        validation_split=0.2
+      AUTOTUNE = tf.data.AUTOTUNE
+      
+      # Dataset loading for training generator (tf.data, GPU-friendly)
+      train_dataset = keras.utils.image_dataset_from_directory(
+        train_dir,
+        validation_split=0.2,
+        subset="training",
+        seed=42,
+        image_size=self.img_size,
+        batch_size=batch_size,
+        label_mode="categorical"
       )
       
-      # Training generator
-      train_generator = train_datagen.flow_from_directory(
+      # Validation dataset generator
+      validation_dataset = keras.utils.image_dataset_from_directory(
         train_dir,
-        target_size=self.img_size,
+        validation_split=0.2,
+        subset="validation",
+        seed=42,
+        image_size=self.img_size,
         batch_size=batch_size,
-        class_mode="categorical",
-        subset="training",
-        shuffle=True
+        label_mode="categorical"
       )
+      
+      # Create data generators with augmentation
+      # train_datagen = ImageDataGenerator(
+      #   rescale=1./255,
+      #   rotation_range=30,
+      #   width_shift_range=0.2,
+      #   brightness_range=[0.8, 1.2],
+      #   height_shift_range=0.2,
+      #   horizontal_flip=True,
+      #   zoom_range=0.3,
+      #   shear_range=0.2,
+      #   fill_mode="nearest",
+      #   validation_split=0.2
+      # )
+      
+      # # Training generator
+      # train_generator = train_datagen.flow_from_directory(
+      #   train_dir,
+      #   target_size=self.img_size,
+      #   batch_size=batch_size,
+      #   class_mode="categorical",
+      #   subset="training",
+      #   shuffle=True
+      # )
       
       # Validation generator
-      validation_generator = train_datagen.flow_from_directory(
-        train_dir,
-        target_size=self.img_size,
-        batch_size=batch_size,
-        class_mode="categorical",
-        subset="validation",
-        shuffle=False
-      )
+      # validation_generator = train_datagen.flow_from_directory(
+      #   train_dir,
+      #   target_size=self.img_size,
+      #   batch_size=batch_size,
+      #   class_mode="categorical",
+      #   subset="validation",
+      #   shuffle=False
+      # )
       
       # Update class names from generator
-      self.class_names = list(train_generator.class_indices.keys())
-      with open(self.class_names_path, "w") as f:
-        json.dump(self.class_names, f)
+      self.class_names = train_dataset.class_names
       self.num_classes = len(self.class_names)
       
+      with open(self.class_names_path, "w") as f:
+        json.dump(self.class_names, f)
+      
+      # class distribution + weights
+      y_train = np.concatenate([y.numpy().argmax(axis=1) for _, y in train_dataset])
+      counts = np.bincount(y_train)
       # Visulaize and print class balance
-      counts = np.bincount(train_generator.classes)
+      # counts = np.bincount(train_generator.classes)
       for idx, count in enumerate(counts):
         logging.info(f"Class {self.class_names[idx]}: {count} images")
         
@@ -245,10 +282,30 @@ class PlantDiseaseModel:
       # Compute class weights
       class_weights = class_weight.compute_class_weight(
         class_weight="balanced",
-        classes=np.unique(train_generator.classes),
-        y=train_generator.classes
+        classes=np.unique(y_train),
+        y=y_train
       )
       class_weights = dict(enumerate(class_weights))
+      
+      # Data augmentation (runs on GPU)
+      normalization = layers.Rescaling(1. / 255)
+      
+      augmentation = keras.Sequential([
+        layers.RandomFlip("horizontal"),
+        layers.RandomRotation(0.1),
+        layers.RandomZoom(0.1),
+        layers.RandomContrast(0.1),
+      ])
+      
+      train_dataset = (
+        train_dataset.map(lambda x, y: (augmentation(normalization(x), training=True), y),
+                          num_parallel_calls=AUTOTUNE).cache().shuffle(256).prefetch(AUTOTUNE)
+      )
+      
+      validation_dataset = (
+        validation_dataset.map(lambda x, y: (normalization(x), y),
+                               num_parallel_calls=AUTOTUNE).cache().prefetch(AUTOTUNE)
+      )
       
       # User MobileNetV2 for transfer training + L2
       base_model = MobileNetV2(input_shape=(224, 224, 3), include_top=False, weights="imagenet")
@@ -261,7 +318,7 @@ class PlantDiseaseModel:
       x = layers.Dense(256, activation="relu", kernel_regularizer=reg)(x)
       x= layers.BatchNormalization()(x)
       x = layers.Dropout(0.5)(x)
-      outputs = layers.Dense(self.num_classes, activation="softmax")(x)
+      outputs = layers.Dense(self.num_classes, activation="softmax", dtype="float32")(x)
       
       self.model = keras.Model(inputs, outputs)
       self.model.compile(
@@ -298,9 +355,9 @@ class PlantDiseaseModel:
       
       # Phase 1: Train top layers only with frozen base
       history1 = self.model.fit(
-        train_generator,
+        train_dataset,
         epochs=initial_epochs,
-        validation_data=validation_generator,
+        validation_data=validation_dataset,
         callbacks=callbacks,
         verbose=1,
         class_weight=class_weights
@@ -320,10 +377,10 @@ class PlantDiseaseModel:
       )
       
       history2 = self.model.fit(
-        train_generator,
+        train_dataset,
         epochs=initial_epochs + fine_tune_epochs,
         initial_epoch=history1.epoch[-1] + 1,
-        validation_data=validation_generator,
+        validation_data=validation_dataset,
         callbacks=callbacks,
         verbose=1,
         class_weight=class_weights
@@ -334,7 +391,7 @@ class PlantDiseaseModel:
         json.dump(self.class_names, f)
       
       # Evaluate final model
-      val_loss, val_accuracy = self.model.evaluate(validation_generator, verbose=0)
+      val_loss, val_accuracy = self.model.evaluate(validation_dataset, verbose=0)
       logging.info(f"Final validation accuracy: {val_accuracy:.4f}")
       
       # Combine histories
@@ -478,8 +535,14 @@ class PlantDiseaseModel:
       
       """This for evaluate_model.py to run with the provided test data avoiding errors"""
       # Build classification report using training class names
-      from sklearn.metrics import classification_report
+      from sklearn.metrics import classification_report, confusion_matrix, precision_score, recall_score, f1_score
       from sklearn.utils.multiclass import unique_labels
+      import seaborn as sns
+      
+      # Macro metrics
+      macro_precision = precision_score(true_classes, predicted_classes, average="macro", zero_division=0)
+      macro_recall = recall_score(true_classes, predicted_classes, average="macro", zero_division=0)
+      macro_f1 = f1_score(true_classes, predicted_classes, average="macro", zero_division=0)
       
       # Classification report
       # report = classification_report(true_classes, predicted_classes, target_names=class_labels)
@@ -490,13 +553,34 @@ class PlantDiseaseModel:
         true_classes,
         predicted_classes,
         labels=labels_in_test,
-        target_names=label_names_in_test
+        target_names=label_names_in_test,
+        zero_division=0
       )
       
+      # Confusion matrix
+      cm = confusion_matrix(true_classes, predicted_classes)
+      plt.figure(figsize=(14, 12))
+      sns.heatmap(cm, cmap="Blues")
+      plt.title("Confusion Matrix")
+      plt.xlabel("Predicted")
+      plt.ylabel("Actual")
+      plt.tight_layout()
+      plt.savefig("confusion_matrix.png")
+      plt.close()
+      
       logging.info(f"Test Accuracy: {test_accuracy:.4f}")
+      logging.info(f"Macro Precision: {macro_precision:.4f}")
+      logging.info(f"Macro Recall: {macro_recall:.4f}")
+      logging.info(f"Macro F1-score: {macro_f1:.4f}")
       logging.info(f"Classification Report:\n{report}")
       
-      return test_accuracy, report
+      return {
+              "accuracy": test_accuracy,
+              "macro_precision": macro_precision,
+              "macro_recall": macro_recall,
+              "macro_f1": macro_f1,
+              "report": report,
+            }
       
     except Exception as e:
       logging.error(f"Error evaluating model: {str(e)}")
