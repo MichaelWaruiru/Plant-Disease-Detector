@@ -4,6 +4,9 @@ import logging
 import tensorflow as tf # Required for GPU configuration
 from ml_model import PlantDiseaseModel
 
+# Setup logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
 # GPU Setup
 gpus = tf.config.list_physical_devices("GPU")
 if gpus:
@@ -17,14 +20,11 @@ if gpus:
 else:
         logging.info("No GPU found. Training will run on CPU.")
 
-# Setup logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
 def main():
     parser = argparse.ArgumentParser(description='Train Plant Disease Detection Model')
-    parser.add_argument('--dataset_path', type=str, default='dataset', help='Path to PlantVillage dataset')
+    parser.add_argument('--dataset_path', type=str, default='dataset/PlantVillage', help='Path to PlantVillage dataset')
     parser.add_argument('--epochs', type=int, default=30, help='Number of training epochs')
-    parser.add_argument('--batch_size', type=int, default=32, help='Batch size for training')
+    parser.add_argument('--batch_size', type=int, default=64, help='Batch size for training')
     parser.add_argument('--test_split', type=float, default=0.2, help='Fraction of data to use for testing')
     
     args = parser.parse_args()
