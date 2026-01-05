@@ -192,7 +192,7 @@ class PlantDiseaseModel:
     except Exception as e:
       logging.error(f"Error training model: {str(e)}")
   
-  def train_with_real_data(self, train_dir, epochs=30, batch_size=32):
+  def train_with_real_data(self, train_dir, epochs=30, batch_size=64):
     """Train model with real PlantVillage dataset"""
     try:
       import tensorflow as tf
