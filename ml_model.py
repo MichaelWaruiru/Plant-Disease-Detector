@@ -205,6 +205,7 @@ class PlantDiseaseModel:
         train_dir,
         validation_split=0.2,
         subset="training",
+        shuffle=True,
         seed=42,
         image_size=self.img_size,
         batch_size=batch_size,
@@ -216,45 +217,12 @@ class PlantDiseaseModel:
         train_dir,
         validation_split=0.2,
         subset="validation",
+        shuffle=False,
         seed=42,
         image_size=self.img_size,
         batch_size=batch_size,
         label_mode="categorical"
       )
-      
-      # Create data generators with augmentation
-      # train_datagen = ImageDataGenerator(
-      #   rescale=1./255,
-      #   rotation_range=30,
-      #   width_shift_range=0.2,
-      #   brightness_range=[0.8, 1.2],
-      #   height_shift_range=0.2,
-      #   horizontal_flip=True,
-      #   zoom_range=0.3,
-      #   shear_range=0.2,
-      #   fill_mode="nearest",
-      #   validation_split=0.2
-      # )
-      
-      # # Training generator
-      # train_generator = train_datagen.flow_from_directory(
-      #   train_dir,
-      #   target_size=self.img_size,
-      #   batch_size=batch_size,
-      #   class_mode="categorical",
-      #   subset="training",
-      #   shuffle=True
-      # )
-      
-      # Validation generator
-      # validation_generator = train_datagen.flow_from_directory(
-      #   train_dir,
-      #   target_size=self.img_size,
-      #   batch_size=batch_size,
-      #   class_mode="categorical",
-      #   subset="validation",
-      #   shuffle=False
-      # )
       
       # Update class names from generator
       self.class_names = train_dataset.class_names
