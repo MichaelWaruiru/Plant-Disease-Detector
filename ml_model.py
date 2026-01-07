@@ -20,7 +20,10 @@ class PlantDiseaseModel:
   """Plant Disease Detection Model"""
   def __init__(self):
     self.model = None
-    self.dataset_path = "dataset/PlantVillage/Plant Diseases Dataset"
+    self.dataset_path = (
+      "dataset/PlantVillage/Plant Diseases Dataset/"
+      "New Plant Diseases Dataset(Augmented)/train"
+    )
     self.img_size = (224, 224)
    
     self.class_names_path = "models/class_names.json"
@@ -435,7 +438,8 @@ class PlantDiseaseModel:
         target_size=self.img_size,
         batch_size=32,
         class_mode="categorical",
-        shuffle=False
+        shuffle=False,
+        classes=self.class_names
       )
       
       # Evaluate
