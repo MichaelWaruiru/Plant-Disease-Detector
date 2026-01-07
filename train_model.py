@@ -27,7 +27,7 @@ os.makedirs(os.path.dirname(CHECKPOINT_PATH), exist_ok=True)
 def main():
     parser = argparse.ArgumentParser(description='Train Plant Disease Detection Model')
     parser.add_argument('--dataset_path', type=str, default='dataset/PlantVillage', help='Path to PlantVillage dataset')
-    parser.add_argument('--epochs', type=int, default=2, help='Number of training epochs')
+    parser.add_argument('--epochs', type=int, default=30, help='Number of training epochs')
     parser.add_argument('--batch_size', type=int, default=64, help='Batch size for training')
     parser.add_argument('--test_split', type=float, default=0.2, help='Fraction of data to use for testing')
     
