@@ -58,13 +58,7 @@ class PlantDiseaseModel:
     """Create CNN Model"""
     model = keras.Sequential([
       keras.Input(shape=(224, 224, 3)),
-      
-     # Data augmentation layers
-      # layers.RandomFlip("horizontal"),
-      # layers.RandomRotation(0.1),
-      # layers.RandomZoom(0.1),
-      # layers.RandomContrast(0.1),
-      
+
       # Rescaling
       layers.Rescaling(1./255),
       
@@ -75,10 +69,10 @@ class PlantDiseaseModel:
       layers.SpatialDropout2D(0.3),
       
       # Second Conv Block
-      # layers.Conv2D(64, (3, 3), activation="relu"),
-      # layers.BatchNormalization(),
-      # layers.MaxPooling2D((2, 2)),
-      # layers.Dropout(0.25),
+      layers.Conv2D(64, (3, 3), activation="relu", kernel_regularizer=regularizers.l2(0.001)),
+      layers.BatchNormalization(),
+      layers.MaxPooling2D((2, 2)),
+      layers.Dropout(0.25),
       
       # Third Conv Block
       layers.Conv2D(128, (3, 3), activation='relu', kernel_regularizer=regularizers.l2(0.001)),
@@ -96,13 +90,9 @@ class PlantDiseaseModel:
       layers.GlobalAveragePooling2D(),
       
       # Dense layers
-      layers.Dense(512, activation='relu', kernel_regularizer=regularizers.l2(0.001)),
+      layers.Dense(256, activation='relu', kernel_regularizer=regularizers.l2(0.001)),
       layers.BatchNormalization(),
       layers.Dropout(0.5),
-      
-      # layers.Dense(256, activation='relu'),
-      # layers.BatchNormalization(),
-      # layers.Dropout(0.5),
       
       # Output layer
       layers.Dense(self.num_classes, activation='softmax')
@@ -196,8 +186,7 @@ class PlantDiseaseModel:
       # class distribution + weights
       y_train = np.concatenate([y.numpy().argmax(axis=1) for _, y in train_dataset])
       counts = np.bincount(y_train)
-      # Visulaize and print class balance
-      # counts = np.bincount(train_generator.classes)
+      # Visualize and print class balance
       for idx, count in enumerate(counts):
         logging.info(f"Class {self.class_names[idx]}: {count} images")
         
@@ -475,7 +464,6 @@ class PlantDiseaseModel:
       macro_f1 = f1_score(true_classes, predicted_classes, average="macro", zero_division=0)
       
       # Classification report
-      # report = classification_report(true_classes, predicted_classes, target_names=class_labels)
       labels_in_test = sorted(list(unique_labels(true_classes, predicted_classes)))
       label_names_in_test = [self.class_names[i] for i in labels_in_test]
       
