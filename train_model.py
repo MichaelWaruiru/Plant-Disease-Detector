@@ -19,11 +19,15 @@ if gpus:
         logging.error(f"Error setting GPU memory growth: {e}")
 else:
         logging.info("No GPU found. Training will run on CPU.")
+        
+# Checkpoint path
+CHECKPOINT_PATH = "checkpoints/model_checkpoint.h5"
+os.makedirs(os.path.dirname(CHECKPOINT_PATH), exist_ok=True)
 
 def main():
     parser = argparse.ArgumentParser(description='Train Plant Disease Detection Model')
     parser.add_argument('--dataset_path', type=str, default='dataset/PlantVillage', help='Path to PlantVillage dataset')
-    parser.add_argument('--epochs', type=int, default=30, help='Number of training epochs')
+    parser.add_argument('--epochs', type=int, default=2, help='Number of training epochs')
     parser.add_argument('--batch_size', type=int, default=64, help='Batch size for training')
     parser.add_argument('--test_split', type=float, default=0.2, help='Fraction of data to use for testing')
     
@@ -33,16 +37,30 @@ def main():
     if not os.path.exists(args.dataset_path):
         logging.error(f"Dataset path {args.dataset_path} does not exist!")
         logging.info("Please download the PlantVillage dataset and extract it to the dataset folder")
-        logging.info("Dataset structure should be: dataset/class_name/image_files")
         return
     
     # Create model
     logging.info("Initializing model...")
     model = PlantDiseaseModel()
     
+    # Load checkpoint if exists
+    if os.path.exists(CHECKPOINT_PATH):
+        logging.info(f"Found checkpoint at {CHECKPOINT_PATH}, resuming training...")
+        model.model.load_weights(CHECKPOINT_PATH)
+    else:
+        logging.info("No checkpoint found, starting fresh training.")
+        
+        # Setup checkpoint callback
+        checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
+            CHECKPOINT_PATH,
+            monitor="val_loss",
+            verbose=1,
+            save_best_only=False,
+            save_weights_only=True
+        )
+    
     # Train model
-    logging.info(f"Starting training with dataset: {args.dataset_path}")
-    logging.info(f"Epochs: {args.epochs}, Batch size: {args.batch_size}")
+    logging.info(f"Starting training: epochs={args.epochs}, batch_size={args.batch_size}")
     
     result = model.train_with_real_data(
         train_dir=args.dataset_path,
@@ -56,6 +74,10 @@ def main():
         logging.info(f"Validation Loss: {val_loss:.4f}")
         logging.info(f"Final Validation Accuracy: {val_accuracy:.4f}")
         logging.info(f"Model saved to {model.model_path}")
+        
+        # Save final model
+        model.model.save(model.model_path)
+        logging.info(f"Final model saved to {model.model_path}")
         
         # Plot training history
         try:
