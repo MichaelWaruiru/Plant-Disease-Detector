@@ -132,7 +132,6 @@ class PlantDiseaseModel:
           logging.info("Loaded existing CNN model")
       else:
         self.model = self.create_model()
-        # self.train_model_with_synthetic_data()
         logging.info("Created new CNN model")
     except Exception as e:
       logging.error(f"Error loading model: {str(e)}")
@@ -154,43 +153,6 @@ class PlantDiseaseModel:
     except Exception as e:
       logging.error(f"Error preprocessing image: {str(e)}")
       return None
-  
-  def train_model_with_synthetic_data(self):
-    """Train model with synthetic data if real dataset is not available"""
-    try:
-      # Create synthetic training data
-      X_train = np.random.rand(1000, 224, 224, 3) * 255
-      y_train = np.random.randint(0, self.num_classes, 1000)
-      
-      X_val = np.random.rand(200, 224, 224, 3) * 255
-      y_val = np.random.randint(0, self.num_classes, 200)
-      
-      early_stop = keras.callbacks.EarlyStopping(
-        monitor="val_accuracy",
-        patience=5,
-        restore_best_weights=True
-      )
-      
-      # Train model with reduced epochs for synthetic data
-      history = self.model.fit(
-        X_train, y_train,
-        validation_data=(X_val, y_val),
-        epochs=5,  # Reduced for synthetic data
-        batch_size=32,
-        verbose=1,
-        callbacks=[early_stop]
-      )
-      
-      # Save model and class names
-      self.model.save(self.model_path)
-      with open(self.class_names_path, "w") as f:
-        json.dump(self.class_names, f)
-      
-      logging.info("Model trained with synthetic data")
-      return history
-        
-    except Exception as e:
-      logging.error(f"Error training model: {str(e)}")
   
   def train_with_real_data(self, train_dir, epochs=30, batch_size=64):
     """Train model with real PlantVillage dataset"""
