@@ -19,10 +19,6 @@ if gpus:
         logging.error(f"Error setting GPU memory growth: {e}")
 else:
         logging.info("No GPU found. Training will run on CPU.")
-        
-# Checkpoint path
-CHECKPOINT_PATH = "checkpoints/model_checkpoint.h5"
-os.makedirs(os.path.dirname(CHECKPOINT_PATH), exist_ok=True)
 
 def main():
     parser = argparse.ArgumentParser(description='Train Plant Disease Detection Model')
@@ -42,22 +38,6 @@ def main():
     # Create model
     logging.info("Initializing model...")
     model = PlantDiseaseModel()
-    
-    # Load checkpoint if exists
-    if os.path.exists(CHECKPOINT_PATH):
-        logging.info(f"Found checkpoint at {CHECKPOINT_PATH}, resuming training...")
-        model.model.load_weights(CHECKPOINT_PATH)
-    else:
-        logging.info("No checkpoint found, starting fresh training.")
-        
-        # Setup checkpoint callback
-        checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
-            CHECKPOINT_PATH,
-            monitor="val_loss",
-            verbose=1,
-            save_best_only=False,
-            save_weights_only=True
-        )
     
     # Train model
     logging.info(f"Starting training: epochs={args.epochs}, batch_size={args.batch_size}")
