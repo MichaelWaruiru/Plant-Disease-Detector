@@ -45,25 +45,21 @@ class PlantDiseaseModel:
         return json.load(f)
       
     # If dataset exists, load class names from directory
-    if os.path.exists(self.dataset_path):
-      class_names = sorted([
-        folder for folder in os.listdir(self.dataset_path)
-        if os.path.isdir(os.path.join(self.dataset_path, folder))
-      ])
-      with open(self.class_names_path, "w") as f:
-        json.dump(class_names, f)
-      return class_names
-    # Fallback to DISEASE_INFO keys if no dataset or class names file
-    logging.warning("Dataset not found, using default class names")
-    return sorted(list(DISEASE_INFO.keys()))
+    if not os.path.exists(self.dataset_path):
+      raise FileNotFoundError("Dataset path not found. Cannot infer class names.")
+    
+    class_names = sorted([
+      folder for folder in os.listdir(self.dataset_path)
+      if os.path.isdir(os.path.join(self.dataset_path, folder))
+    ])
+    with open(self.class_names_path, "w") as f:
+      json.dump(class_names, f, indent=2)
+    return class_names
     
   def create_model(self):
     """Create CNN Model"""
     model = keras.Sequential([
       keras.Input(shape=(224, 224, 3)),
-
-      # Rescaling
-      layers.Rescaling(1./255),
       
       # First Conv Block
       layers.Conv2D(64, (3, 3), activation="relu", kernel_regularizer=regularizers.l2(0.001)),
@@ -98,7 +94,7 @@ class PlantDiseaseModel:
       layers.Dropout(0.5),
       
       # Output layer
-      layers.Dense(self.num_classes, activation='softmax')
+      layers.Dense(self.num_classes, activation='softmax', dtype="float32")
       
     ])
     
@@ -117,19 +113,12 @@ class PlantDiseaseModel:
   
   def load_or_create_model(self):
     """Load existing model or create new one"""
-    try:
-      if os.path.exists(self.model_path) and os.path.exists(self.class_names_path):
-          self.model = keras.models.load_model(self.model_path)
-          with open(self.class_names_path, 'r') as f:
-              self.class_names = json.load(f)
-          logging.info("Loaded existing CNN model")
-      else:
-        self.model = self.create_model()
-        logging.info("Created new CNN model")
-    except Exception as e:
-      logging.error(f"Error loading model: {str(e)}")
+    if os.path.exists(self.model_path):
+      self.model = keras.models.load_model(self.model_path)
+      logging.info("Loaded existing model")
+    else:
       self.model = self.create_model()
-      logging.info("Created new model due to loading error")
+      logging.info("Created new model")
   
   def preprocess_image(self, image_path):
     """Preprocess image for prediction"""
@@ -139,7 +128,7 @@ class PlantDiseaseModel:
       image = image.resize(self.img_size)
       
       # Convert to numpy array and normalize
-      img_array = np.array(image).astype("float32") / 255
+      img_array = np.array(image).astype("float32") / 255.0 # Normalization happen here
       img_array = np.expand_dims(img_array, axis=0)
       
       return img_array
@@ -179,12 +168,10 @@ class PlantDiseaseModel:
         label_mode="categorical"
       )
       
-      # Update class names from generator
-      self.class_names = train_dataset.class_names
-      self.num_classes = len(self.class_names)
-      
-      with open(self.class_names_path, "w") as f:
-        json.dump(self.class_names, f)
+      # Verify class order
+      assert train_dataset.class_names == self.class_names, (
+          "Class mismatch! Dataset folder order changed."
+        )
       
       # class distribution + weights
       y_train = np.concatenate([y.numpy().argmax(axis=1) for _, y in train_dataset])
@@ -194,10 +181,10 @@ class PlantDiseaseModel:
         logging.info(f"Class {self.class_names[idx]}: {count} images")
         
       # Save class distrubition plot
-      plt.figure(figsize=(8, 3))
+      plt.figure(figsize=(max(12, len(self.class_names) * 0.4), 4))
       plt.bar(self.class_names, counts)
-      plt.xticks(rotation=90)
-      plt.tight_layout()
+      plt.xticks(rotation=90, fontsize=8)
+      plt.subplots_adjust(bottom=0.35)
       plt.savefig("class_distribution.png")
       plt.close()
       
@@ -240,7 +227,7 @@ class PlantDiseaseModel:
       x = layers.Dense(256, activation="relu", kernel_regularizer=reg)(x)
       x= layers.BatchNormalization()(x)
       x = layers.Dropout(0.5)(x)
-      outputs = layers.Dense(self.num_classes, activation="softmax", dtype="float32")(x)
+      outputs = layers.Dense(self.num_classes, activation="softmax", dtype="float32")(x) # dtype required for mixed precision
       
       self.model = keras.Model(inputs, outputs)
       self.model.compile(
@@ -286,9 +273,6 @@ class PlantDiseaseModel:
       )
       
       # Unfreeze base model for fine-tuning
-      # base_model.trainable = True
-      # for layer in base_model.layers[:-40]:
-      #   layer.trainable = False
       for layer in base_model.layers[-40:]:
         layer.trainable = True
         
@@ -307,10 +291,6 @@ class PlantDiseaseModel:
         verbose=1,
         class_weight=class_weights
       )
-      
-      # Save class names
-      with open(self.class_names_path, "w") as f:
-        json.dump(self.class_names, f)
       
       # Evaluate final model
       val_loss, val_accuracy = self.model.evaluate(validation_dataset, verbose=0)
@@ -445,16 +425,11 @@ class PlantDiseaseModel:
       # Evaluate
       test_loss, test_accuracy = self.model.evaluate(test_generator, verbose=1)
       
-      # Detailed predictions for classification report
+      # Detailed predictions for classification report and test set
       predictions = self.model.predict(test_generator, verbose=1)
       predicted_classes = np.argmax(predictions, axis=1)
       
       true_classes = test_generator.classes
-      # class_labels = list(test_generator.class_indices.keys())
-      
-      # Predict on test set
-      predictions = self.model.predict(test_generator, verbose=1)
-      predicted_classes = np.argmax(predictions, axis=1)
       
       """This for evaluate_model.py to run with the provided test data avoiding errors"""
       # Build classification report using training class names
