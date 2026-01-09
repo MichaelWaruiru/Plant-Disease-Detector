@@ -93,7 +93,7 @@ Create a .env file in the root folder with your Flask session secret:
 Make sure you have the PlantVillage dataset in the dataset/ folder, structured like:
 ```
     dataset/PlantVillage/
-      Plant Diseases Dataset/
+      Plant Diseases Dataset/New Plant Diseases Dataset(Augmented)
         train/
         valid/
           Pepper__bell___Bacterial_spot/
