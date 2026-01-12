@@ -3,11 +3,12 @@ import logging
 from flask import render_template, request, redirect, url_for, flash
 from werkzeug.utils import secure_filename
 from app import app
-from ml_model import PlantDiseaseModel
+# from ml_model import PlantDiseaseModel
+from model_instance import model
 from disease_data import get_disease_info, get_treatment_recommendations
 
 # Initialize the model
-model = PlantDiseaseModel()
+# model = PlantDiseaseModel()
 
 # Allowed file extensions
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "bmp", "webp"}
